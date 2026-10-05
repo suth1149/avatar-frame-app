@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "ccq2411b-app",
+    "slug": "ccq2411b-app",
+    "scheme": "ccq2411b-app",
+    "experiments": {
+      "typedRoutes": true
+    },
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO"
+      ],
+      "package": "com.anonymous.ccq2411bapp"
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Ứng dụng cần quyền truy cập thư viện ảnh để chọn ảnh nền avatar.",
+          "cameraPermission": "Ứng dụng cần quyền sử dụng máy ảnh để chụp ảnh trực tiếp."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Ứng dụng cần quyền lưu ảnh đã chỉnh sửa về máy.",
+          "savePhotosPermission": "Cho phép ứng dụng lưu ảnh vào thư viện của bạn."
+        }
+      ],
+      "expo-router"
+    ]
+  }
+}
