@@ -1,86 +1,64 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Image, Alert } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
+import React from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams();
-  
-  // Dùng state để lưu giữ lại ảnh kết quả, tránh bị mất khi chuyển qua lại các màn hình
-  const [savedImageUri, setSavedImageUri] = useState(null);
-
-  useEffect(() => {
-    if (params.resultUri) {
-      setSavedImageUri(params.resultUri);
-    }
-  }, [params.resultUri]);
-
-  const pickImage = async (useCamera = false) => {
-    let permissionResult = useCamera 
-      ? await ImagePicker.requestCameraPermissionsAsync()
-      : await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-    if (!permissionResult.granted) {
-      Alert.alert("Thông báo", "Bạn cần cấp quyền để sử dụng tính năng này!");
-      return;
-    }
-
-    let result = useCamera 
-      ? await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 1 })
-      : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 1 });
-      
-    if (!result.canceled) {
-      router.push({
-        pathname: '/edit-avatar',
-        params: { uri: result.assets[0].uri }
-      });
-    }
-  };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>avata frame</Text>
-      
-      {/* Khung hiển thị ảnh kết quả: Nhấp vào ảnh sẽ chuyển qua trang chi tiết */}
-      <View style={styles.frameBox}>
-        {savedImageUri ? (
-          <TouchableOpacity 
-            activeOpacity={0.9} 
-            onPress={() => router.push({ pathname: '/detail', params: { uri: savedImageUri } })}
-            style={{ width: '100%', height: '100%' }}
-          >
-            <Image source={{ uri: savedImageUri }} style={styles.resultImage} />
-          </TouchableOpacity>
-        ) : (
-          <Text style={styles.frameText}>Chưa có ảnh nào được tạo</Text>
-        )}
-      </View>
+      <Text style={styles.title}>Avatar Frame</Text>
+      <Text style={styles.subtitle}>Tạo khung ảnh của riêng bạn hoặc quét mã QR để xem khung được chia sẻ.</Text>
 
-      <View style={styles.buttonRow}>
-        <TouchableOpacity style={styles.addButton} onPress={() => pickImage(false)}>
-          <Ionicons name="images" size={20} color="#fff" />
-          <Text style={styles.btnText}>Thư Viện</Text>
-        </TouchableOpacity>
+      <TouchableOpacity style={styles.primaryButton} onPress={() => router.push('/edit-avatar')}>
+        <Ionicons name="create-outline" size={22} color="#fff" />
+        <Text style={styles.buttonText}>Tạo Frame Mới</Text>
+      </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.addButton, styles.cameraBtn]} onPress={() => pickImage(true)}>
-          <Ionicons name="camera" size={20} color="#fff" />
-          <Text style={styles.btnText}>Chụp Ảnh</Text>
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity style={styles.secondaryButton} onPress={() => router.push('/scanner')}>
+        <Ionicons name="qr-code-outline" size={22} color="#007AFF" />
+        <Text style={styles.secondaryButtonText}>Quét mã QR</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fa', alignItems: 'center', justifyContent: 'center', padding: 20 },
-  title: { fontSize: 22, fontWeight: 'bold', marginBottom: 20, color: '#333' },
-  frameBox: { width: 280, height: 280, borderWidth: 2, borderColor: '#333', borderRadius: 12, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff', marginBottom: 30, overflow: 'hidden' },
-  frameText: { color: '#888', fontSize: 14 },
-  resultImage: { width: '100%', height: '100%' },
-  buttonRow: { flexDirection: 'row', gap: 15 },
-  addButton: { flexDirection: 'row', backgroundColor: '#007AFF', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 10, alignItems: 'center', gap: 8 },
-  cameraBtn: { backgroundColor: '#34C759' },
-  btnText: { color: '#fff', fontSize: 15, fontWeight: '600' }
+  container: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8f9fa',
+    padding: 24,
+  },
+  title: { color: '#222', fontSize: 28, fontWeight: 'bold', marginBottom: 10 },
+  subtitle: { color: '#666', fontSize: 15, lineHeight: 22, marginBottom: 32, textAlign: 'center' },
+  primaryButton: {
+    alignItems: 'center',
+    backgroundColor: '#007AFF',
+    borderRadius: 12,
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'center',
+    marginBottom: 14,
+    paddingHorizontal: 24,
+    paddingVertical: 15,
+    width: '100%',
+  },
+  secondaryButton: {
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderColor: '#007AFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 15,
+    width: '100%',
+  },
+  buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  secondaryButtonText: { color: '#007AFF', fontSize: 16, fontWeight: '700' },
 });

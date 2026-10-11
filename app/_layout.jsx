@@ -8,6 +8,9 @@ export default function RootLayout() {
       
       {/* Màn hình chỉnh sửa avatar */}
       <Stack.Screen name="edit-avatar" options={{ headerShown: false }} />
+
+      {/* Màn hình quét mã QR */}
+      <Stack.Screen name="scanner" options={{ headerShown: false }} />
       
       {/* Màn hình xem chi tiết ảnh */}
       <Stack.Screen 

@@ -44,6 +44,13 @@
         }
       ],
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Ứng dụng cần quyền camera để quét mã QR.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
         "expo-media-library",
         {
           "photosPermission": "Ứng dụng cần quyền lưu ảnh đã chỉnh sửa về máy.",
