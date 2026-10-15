@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -11,6 +11,16 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { doc, getDoc } from 'firebase/firestore';
+import Animated, {
+  cancelAnimation,
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { db } from '../firebaseConfig';
 
 export default function ScannerScreen() {
@@ -19,6 +29,50 @@ export default function ScannerScreen() {
   const [isFetching, setIsFetching] = useState(false);
   const [isRequestingPermission, setIsRequestingPermission] = useState(false);
   const fetchInProgress = useRef(false);
+  const laserPosition = useSharedValue(10);
+  const frameScale = useSharedValue(1);
+  const frameBorderProgress = useSharedValue(0);
+
+  const laserStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: laserPosition.value }],
+  }));
+  const scanFrameStyle = useAnimatedStyle(() => ({
+    borderColor: interpolateColor(
+      frameBorderProgress.value,
+      [0, 1],
+      ['#fff', '#28a745'],
+    ),
+    transform: [{ scale: frameScale.value }],
+  }));
+
+  useEffect(() => {
+    laserPosition.value = withRepeat(
+      withTiming(245, { duration: 1600 }),
+      -1,
+      true,
+    );
+
+    return () => cancelAnimation(laserPosition);
+  }, [laserPosition]);
+
+  useEffect(() => {
+    if (isFetching) {
+      frameScale.value = withSpring(0.92);
+      frameBorderProgress.value = withTiming(1, { duration: 180 });
+    } else {
+      frameScale.value = withRepeat(
+        withSequence(
+          withTiming(1.04, { duration: 900 }),
+          withTiming(1, { duration: 900 }),
+        ),
+        -1,
+        false,
+      );
+      frameBorderProgress.value = withTiming(0, { duration: 180 });
+    }
+
+    return () => cancelAnimation(frameScale);
+  }, [frameBorderProgress, frameScale, isFetching]);
 
   const handleRequestPermission = async () => {
     setIsRequestingPermission(true);
@@ -46,9 +100,11 @@ export default function ScannerScreen() {
         return;
       }
 
-      router.push({
+      fetchInProgress.current = false;
+      setIsFetching(false);
+      router.replace({
         pathname: '/edit-avatar',
-        params: { importedConfig: JSON.stringify(frameSnapshot.data()) },
+        params: { importedConfig: encodeURIComponent(JSON.stringify(frameSnapshot.data())) },
       });
     } catch (error) {
       Alert.alert('Lỗi', `Không thể tải khung ảnh: ${error.message}`);
@@ -93,6 +149,12 @@ export default function ScannerScreen() {
         barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
         onBarcodeScanned={isFetching ? undefined : handleBarcodeScanned}
       />
+      {isFetching ? (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#fff" />
+          <Text style={styles.loadingText}>Đang tải khung ảnh...</Text>
+        </View>
+      ) : null}
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton} accessibilityLabel="Quay lại">
           <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -101,15 +163,13 @@ export default function ScannerScreen() {
         <View style={styles.backButton} />
       </View>
       <View pointerEvents="none" style={styles.scanOverlay}>
-        <View style={styles.scanFrame} />
+        <Animated.View style={[styles.scanFrame, scanFrameStyle]}>
+          {!isFetching ? (
+            <Animated.View style={[styles.laserLine, laserStyle]} />
+          ) : null}
+        </Animated.View>
         <Text style={styles.instruction}>Đưa mã QR vào giữa khung hình</Text>
       </View>
-      {isFetching ? (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#fff" />
-          <Text style={styles.loadingText}>Đang tải khung ảnh...</Text>
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -128,7 +188,28 @@ const styles = StyleSheet.create({
   backButton: { width: 34, alignItems: 'center', justifyContent: 'center' },
   title: { color: '#fff', fontSize: 18, fontWeight: '700' },
   scanOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
-  scanFrame: { width: 260, height: 260, borderColor: '#fff', borderWidth: 3, borderRadius: 18 },
+  scanFrame: {
+    width: 260,
+    height: 260,
+    borderColor: '#fff',
+    borderWidth: 3,
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  laserLine: {
+    position: 'absolute',
+    left: '4%',
+    top: 0,
+    width: '92%',
+    height: 3,
+    backgroundColor: '#00E5FF',
+    borderRadius: 2,
+    shadowColor: '#00E5FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    elevation: 8,
+  },
   instruction: {
     color: '#fff',
     backgroundColor: 'rgba(0,0,0,0.55)',

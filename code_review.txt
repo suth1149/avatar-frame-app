@@ -1,0 +1,1096 @@
+﻿=== FILE: detail.jsx ===
+import React, { useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Image,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { addDoc, collection } from 'firebase/firestore';
+import QRCode from 'react-native-qrcode-svg';
+import { captureRef } from 'react-native-view-shot';
+import { db } from '../firebaseConfig';
+
+const { width } = Dimensions.get('window');
+const PREVIEW_SIZE = Math.min(width * 0.9, 420);
+
+const STICKER_SOURCES = {
+  s1: require('../assets/stickers/sticker1.png'),
+  s2: require('../assets/stickers/sticker2.png'),
+  s3: require('../assets/stickers/sticker3.png'),
+  s4: require('../assets/stickers/sticker4.png'),
+  s5: require('../assets/stickers/sticker5.png'),
+  s6: require('../assets/stickers/sticker6.png'),
+  s7: require('../assets/stickers/sticker7.png'),
+  s8: require('../assets/stickers/sticker8.png'),
+  s9: require('../assets/stickers/sticker9.png'),
+  s10: require('../assets/stickers/sticker10.png'),
+};
+
+function getParamString(value) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function parseFrameConfig(value) {
+  if (!value) return null;
+
+  try {
+    const parsed = JSON.parse(getParamString(value));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function getElementSource(element) {
+  if (element.stickerId && STICKER_SOURCES[element.stickerId]) {
+    return STICKER_SOURCES[element.stickerId];
+  }
+  return typeof element.imageUri === 'string' ? { uri: element.imageUri } : null;
+}
+
+export default function DetailScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams();
+  const frameConfig = useMemo(() => parseFrameConfig(params.frameConfig), [params.frameConfig]);
+  const frameRef = useRef(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [sharedDocumentId, setSharedDocumentId] = useState(null);
+
+  const backgroundUri = frameConfig?.backgroundUri || frameConfig?.background?.uri;
+  const elements = Array.isArray(frameConfig?.elements) ? frameConfig.elements : [];
+  const sourceCanvasSize = Number(frameConfig?.canvasSize) > 0 ? Number(frameConfig.canvasSize) : PREVIEW_SIZE;
+  const previewScale = PREVIEW_SIZE / sourceCanvasSize;
+
+  const handleSave = async () => {
+    if (!frameConfig || !frameRef.current) {
+      Alert.alert('Lá»—i', 'KhÃ´ng cÃ³ khung áº£nh há»£p lá»‡ Ä‘á»ƒ lÆ°u.');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      if (Platform.OS === 'web') {
+        const imageUri = await captureRef(frameRef.current, {
+          format: 'png',
+          quality: 1,
+          result: 'tmpfile',
+        });
+        const link = document.createElement('a');
+        link.href = imageUri;
+        link.download = 'avatar-frame.png';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        Alert.alert('ÄÃ£ lÆ°u', 'áº¢nh khung Ä‘Ã£ Ä‘Æ°á»£c táº£i xuá»‘ng.');
+        return;
+      }
+
+      const MediaLibrary = require('expo-media-library');
+      const permission = await MediaLibrary.requestPermissionsAsync(true, ['photo']);
+      if (!permission.granted) {
+        Alert.alert('Thiáº¿u quyá»n', 'Báº¡n cáº§n cáº¥p quyá»n lÆ°u áº£nh vÃ o thÆ° viá»‡n.');
+        return;
+      }
+
+      const imageUri = await captureRef(frameRef.current, {
+        format: 'png',
+        quality: 1,
+        result: 'tmpfile',
+      });
+      await MediaLibrary.Asset.create(imageUri);
+      Alert.alert('ThÃ nh cÃ´ng', 'Khung áº£nh Ä‘Ã£ Ä‘Æ°á»£c lÆ°u vÃ o thÆ° viá»‡n.');
+    } catch (error) {
+      Alert.alert('Lá»—i', `KhÃ´ng thá»ƒ lÆ°u áº£nh: ${error.message}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!frameConfig) {
+      Alert.alert('Lá»—i', 'KhÃ´ng cÃ³ cáº¥u hÃ¬nh khung áº£nh há»£p lá»‡ Ä‘á»ƒ chia sáº».');
+      return;
+    }
+    if (sharedDocumentId) return;
+
+    setIsSharing(true);
+    try {
+      const document = await addDoc(collection(db, 'shared_frames'), frameConfig);
+      setSharedDocumentId(document.id);
+    } catch (error) {
+      Alert.alert('Lá»—i', `KhÃ´ng thá»ƒ chia sáº» khung áº£nh: ${error.message}`);
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  return (
+    <ScrollView contentContainerStyle={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.push('/')} style={styles.backButton} accessibilityLabel="Quay láº¡i">
+          <Ionicons name="arrow-back" size={24} color="#333" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Xem trÆ°á»›c khung</Text>
+        <View style={styles.headerSpacer} />
+      </View>
+
+      {frameConfig ? (
+        <View
+          ref={frameRef}
+          collapsable={false}
+          style={styles.frame}
+          accessibilityLabel="Báº£n xem trÆ°á»›c khung áº£nh"
+        >
+          {backgroundUri ? (
+            <Image source={{ uri: backgroundUri }} style={styles.background} resizeMode="cover" />
+          ) : null}
+          {elements.map((element, index) => {
+            const source = getElementSource(element);
+            if (!source) return null;
+            const size = Number(element.size || (Number(element.scale) || 1) * 70) * previewScale;
+            const x = Number(element.x || 0) * previewScale;
+            const y = Number(element.y || 0) * previewScale;
+            const rotation = Number(element.rotation ?? element.rotate ?? 0);
+
+            return (
+              <Image
+                key={element.id || `${element.stickerId || 'image'}-${index}`}
+                source={source}
+                resizeMode="contain"
+                style={[
+                  styles.element,
+                  {
+                    left: x,
+                    top: y,
+                    width: size,
+                    height: size,
+                    transform: [{ rotate: `${rotation}deg` }],
+                  },
+                ]}
+              />
+            );
+          })}
+        </View>
+      ) : (
+        <Text style={styles.errorText}>KhÃ´ng tÃ¬m tháº¥y cáº¥u hÃ¬nh khung áº£nh.</Text>
+      )}
+
+      <View style={styles.actions}>
+        <TouchableOpacity
+          style={[styles.actionButton, styles.saveButton, isSaving && styles.disabledButton]}
+          onPress={handleSave}
+          disabled={isSaving || isSharing}
+        >
+          {isSaving ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="download-outline" size={19} color="#fff" />
+              <Text style={styles.actionText}>LÆ°u</Text>
+            </>
+          )}
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.actionButton, styles.shareButton, (isSharing || sharedDocumentId) && styles.disabledButton]}
+          onPress={handleShare}
+          disabled={isSaving || isSharing || Boolean(sharedDocumentId)}
+        >
+          {isSharing ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="share-social-outline" size={19} color="#fff" />
+              <Text style={styles.actionText}>{sharedDocumentId ? 'ÄÃ£ chia sáº»' : 'Share'}</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {sharedDocumentId ? (
+        <View style={styles.qrSection}>
+          <Text style={styles.qrTitle}>QuÃ©t mÃ£ QR Ä‘á»ƒ má»Ÿ khung áº£nh</Text>
+          <View style={styles.qrContainer}>
+            <QRCode value={sharedDocumentId} size={190} />
+          </View>
+          <Text style={styles.documentId}>MÃ£ khung: {sharedDocumentId}</Text>
+        </View>
+      ) : null}
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flexGrow: 1, alignItems: 'center', backgroundColor: '#f8f9fa', padding: 18, paddingTop: 42 },
+  header: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
+  backButton: { padding: 4 },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
+  headerSpacer: { width: 32 },
+  frame: {
+    width: PREVIEW_SIZE,
+    height: PREVIEW_SIZE,
+    backgroundColor: '#fff',
+    borderColor: '#ddd',
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  background: { width: '100%', height: '100%', position: 'absolute' },
+  element: { position: 'absolute' },
+  errorText: { color: '#b00020', marginVertical: 30, textAlign: 'center' },
+  actions: { width: '100%', flexDirection: 'row', gap: 12, marginTop: 20 },
+  actionButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 48, borderRadius: 10 },
+  saveButton: { backgroundColor: '#28a745' },
+  shareButton: { backgroundColor: '#007AFF' },
+  disabledButton: { opacity: 0.65 },
+  actionText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  qrSection: { alignItems: 'center', marginTop: 24, marginBottom: 30 },
+  qrTitle: { color: '#333', fontSize: 16, fontWeight: '700', marginBottom: 12 },
+  qrContainer: { backgroundColor: '#fff', borderRadius: 12, padding: 14 },
+  documentId: { color: '#666', fontSize: 12, marginTop: 10 },
+});
+
+=== FILE: edit-avatar.jsx ===
+import React, { useRef, useState } from 'react';
+import {
+  Alert,
+  Dimensions,
+  Image,
+  PanResponder,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { getDownloadURL, ref, uploadString } from 'firebase/storage';
+import { storage } from '../firebaseConfig';
+
+const { width } = Dimensions.get('window');
+const CANVAS_SIZE = width * 0.85;
+
+const INITIAL_STICKERS = [
+  { id: 's1', uri: require('../assets/stickers/sticker1.png') },
+  { id: 's2', uri: require('../assets/stickers/sticker2.png') },
+  { id: 's3', uri: require('../assets/stickers/sticker3.png') },
+  { id: 's4', uri: require('../assets/stickers/sticker4.png') },
+  { id: 's5', uri: require('../assets/stickers/sticker5.png') },
+  { id: 's6', uri: require('../assets/stickers/sticker6.png') },
+  { id: 's7', uri: require('../assets/stickers/sticker7.png') },
+  { id: 's8', uri: require('../assets/stickers/sticker8.png') },
+  { id: 's9', uri: require('../assets/stickers/sticker9.png') },
+  { id: 's10', uri: require('../assets/stickers/sticker10.png') },
+];
+
+function getParamString(value) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function parseImportedConfig(value) {
+  if (!value) return null;
+
+  try {
+    const parsed = JSON.parse(getParamString(value));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch (error) {
+    Alert.alert('Lá»—i', 'Cáº¥u hÃ¬nh khung áº£nh Ä‘Æ°á»£c chia sáº» khÃ´ng há»£p lá»‡.');
+    return null;
+  }
+}
+
+function getImportedElements(config) {
+  if (!Array.isArray(config?.elements)) return [];
+  const sourceCanvasSize = Number(config.canvasSize) > 0 ? Number(config.canvasSize) : CANVAS_SIZE;
+  const scale = CANVAS_SIZE / sourceCanvasSize;
+
+  return config.elements
+    .filter((element) => element && (element.stickerId || typeof element.imageUri === 'string'))
+    .map((element, index) => ({
+      instanceId: String(element.id || `imported-${index}`),
+      stickerId: element.stickerId || null,
+      imageUri: typeof element.imageUri === 'string' ? element.imageUri : null,
+      x: Number(element.x || 0) * scale,
+      y: Number(element.y || 0) * scale,
+      size: Number(element.size || (Number(element.scale) || 1) * 70) * scale,
+      rotate: Number(element.rotation ?? element.rotate ?? 0),
+    }));
+}
+
+export default function EditAvatarScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams();
+  const [importedConfig] = useState(() => parseImportedConfig(getParamString(params.importedConfig)));
+  const initialBackground = importedConfig?.backgroundUri
+    || importedConfig?.background?.uri
+    || getParamString(params.uri)
+    || null;
+
+  const [backgroundUri, setBackgroundUri] = useState(initialBackground);
+  const [backgroundImageData, setBackgroundImageData] = useState(null);
+  const [availableStickers, setAvailableStickers] = useState(INITIAL_STICKERS);
+  const [activeStickers, setActiveStickers] = useState(() => getImportedElements(importedConfig));
+  const [selectedInstanceId, setSelectedInstanceId] = useState(null);
+  const [isCompleting, setIsCompleting] = useState(false);
+  const webDragRef = useRef({
+    isDragging: false,
+    startX: 0,
+    startY: 0,
+    initialElementX: 0,
+    initialElementY: 0,
+    instanceId: null,
+  });
+
+  const selectedSticker = activeStickers.find((sticker) => sticker.instanceId === selectedInstanceId);
+
+  const handleStickerWheel = (event) => {
+    if (Platform.OS !== 'web' || event.deltaX || !event.deltaY) return;
+    event.currentTarget.scrollLeft += event.deltaY;
+  };
+
+  const pickImage = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('ThÃ´ng bÃ¡o', 'Cáº§n cáº¥p quyá»n truy cáº­p thÆ° viá»‡n Ä‘á»ƒ chá»n áº£nh.');
+        return null;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 1,
+        base64: true,
+      });
+
+      return result.canceled ? null : result.assets?.[0] || null;
+    } catch (error) {
+      Alert.alert('Lá»—i', `KhÃ´ng thá»ƒ chá»n áº£nh: ${error.message}`);
+      return null;
+    }
+  };
+
+  const handlePickBackground = async () => {
+    const asset = await pickImage();
+    if (!asset) return;
+    setBackgroundUri(asset.uri);
+    setBackgroundImageData({
+      base64: asset.base64,
+    });
+  };
+
+  const handlePickNewSticker = async () => {
+    const asset = await pickImage();
+    if (!asset) return;
+
+    const newStickerTemplate = {
+      id: `custom-${Date.now()}`,
+      uri: { uri: asset.uri },
+      imageUri: asset.uri,
+      base64: asset.base64,
+    };
+    setAvailableStickers((previous) => [...previous, newStickerTemplate]);
+  };
+
+  const handleAddStickerToCanvas = (stickerTemplate) => {
+    const newInstance = {
+      instanceId: `${Date.now()}-${Math.random()}`,
+      stickerId: stickerTemplate.id.startsWith('custom-') ? null : stickerTemplate.id,
+      imageUri: stickerTemplate.imageUri || null,
+      base64: stickerTemplate.base64 || null,
+      x: 80,
+      y: 80,
+      size: 70,
+      rotate: 0,
+    };
+    setActiveStickers((previous) => [...previous, newInstance]);
+    setSelectedInstanceId(newInstance.instanceId);
+  };
+
+  const updateStickerParam = (key, value) => {
+    if (!selectedInstanceId) return;
+    setActiveStickers((previous) => previous.map((sticker) => (
+      sticker.instanceId === selectedInstanceId ? { ...sticker, [key]: value } : sticker
+    )));
+  };
+
+  const removeSelectedSticker = () => {
+    if (!selectedInstanceId) return;
+    setActiveStickers((previous) => previous.filter((sticker) => sticker.instanceId !== selectedInstanceId));
+    setSelectedInstanceId(null);
+  };
+
+  const createPanResponder = (instanceId) => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => setSelectedInstanceId(instanceId),
+    onPanResponderMove: (event, gestureState) => {
+      setActiveStickers((previous) => previous.map((sticker) => {
+        if (sticker.instanceId !== instanceId) return sticker;
+        return {
+          ...sticker,
+          x: sticker.x + gestureState.dx - (sticker.lastDx || 0),
+          y: sticker.y + gestureState.dy - (sticker.lastDy || 0),
+          lastDx: gestureState.dx,
+          lastDy: gestureState.dy,
+        };
+      }));
+    },
+    onPanResponderRelease: () => {
+      setActiveStickers((previous) => previous.map((sticker) => (
+        sticker.instanceId === instanceId ? { ...sticker, lastDx: 0, lastDy: 0 } : sticker
+      )));
+    },
+    onPanResponderTerminate: () => {
+      setActiveStickers((previous) => previous.map((sticker) => (
+        sticker.instanceId === instanceId ? { ...sticker, lastDx: 0, lastDy: 0 } : sticker
+      )));
+    },
+  });
+
+  const handleWebMouseDown = (event, instanceId) => {
+    if (Platform.OS !== 'web') return;
+    event.stopPropagation();
+    setSelectedInstanceId(instanceId);
+
+    const sticker = activeStickers.find((item) => item.instanceId === instanceId);
+    if (!sticker) return;
+
+    webDragRef.current = {
+      isDragging: true,
+      startX: event.clientX,
+      startY: event.clientY,
+      initialElementX: sticker.x,
+      initialElementY: sticker.y,
+      instanceId,
+    };
+
+    const onMouseMove = (moveEvent) => {
+      if (!webDragRef.current.isDragging) return;
+      const dx = moveEvent.clientX - webDragRef.current.startX;
+      const dy = moveEvent.clientY - webDragRef.current.startY;
+
+      setActiveStickers((previous) => previous.map((item) => (
+        item.instanceId === webDragRef.current.instanceId
+          ? {
+            ...item,
+            x: webDragRef.current.initialElementX + dx,
+            y: webDragRef.current.initialElementY + dy,
+          }
+          : item
+      )));
+    };
+
+    const onMouseUp = () => {
+      webDragRef.current.isDragging = false;
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  const uploadImageData = async ({ base64 }) => {
+    if (!base64) {
+      throw new Error('KhÃ´ng tÃ¬m tháº¥y dá»¯ liá»‡u áº£nh Ä‘á»ƒ táº£i lÃªn. Vui lÃ²ng chá»n láº¡i áº£nh.');
+    }
+
+    const filePath = `shared_frames/images/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+    const storageReference = ref(storage, filePath);
+    const upload = await uploadString(storageReference, base64, 'base64', {
+      contentType: 'image/jpeg',
+    });
+    return getDownloadURL(upload.ref);
+  };
+
+  const handleComplete = async () => {
+    if (isCompleting) return;
+    setIsCompleting(true);
+    try {
+      const isDeviceUri = (uri) => typeof uri === 'string'
+        && /^(file|content|ph|assets-library):/i.test(uri);
+
+      const [sharedBackgroundUri, sharedElements] = await Promise.all([
+        backgroundImageData && isDeviceUri(backgroundUri)
+          ? uploadImageData(backgroundImageData)
+          : Promise.resolve(backgroundUri),
+        Promise.all(activeStickers.map(async (sticker) => ({
+          stickerId: sticker.stickerId,
+          imageUri: isDeviceUri(sticker.imageUri)
+            ? await uploadImageData(sticker)
+            : sticker.imageUri,
+          x: sticker.x,
+          y: sticker.y,
+          rotation: sticker.rotate,
+          size: sticker.size,
+          scale: sticker.size / 70,
+        }))),
+      ]);
+
+      const frameConfig = {
+        version: 1,
+        canvasSize: CANVAS_SIZE,
+        backgroundUri: sharedBackgroundUri,
+        elements: sharedElements,
+      };
+
+      router.push({
+        pathname: '/detail',
+        params: { frameConfig: JSON.stringify(frameConfig) },
+      });
+    } catch (error) {
+      const serverResponse = error?.customData?.serverResponse;
+      const details = [
+        error?.code,
+        error?.message || String(error),
+        typeof serverResponse === 'string' ? serverResponse.slice(0, 300) : null,
+      ].filter(Boolean).join('\n');
+      Alert.alert('Lá»—i', `KhÃ´ng thá»ƒ chuáº©n bá»‹ áº£nh Ä‘á»ƒ chia sáº»:\n${details}`);
+    } finally {
+      setIsCompleting(false);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} accessibilityLabel="Quay láº¡i">
+          <Ionicons name="arrow-back" size={24} color="#333" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Chá»‰nh sá»­a khung</Text>
+        <TouchableOpacity
+          style={[styles.completeButton, isCompleting && styles.disabledButton]}
+          onPress={handleComplete}
+          disabled={isCompleting}
+        >
+          {isCompleting
+            ? <Text style={styles.completeButtonText}>Äang xá»­ lÃ½...</Text>
+            : <Text style={styles.completeButtonText}>HoÃ n thÃ nh</Text>}
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.canvasContainer}>
+        {backgroundUri ? (
+          <Image source={{ uri: backgroundUri }} style={styles.bgImage} />
+        ) : (
+          <TouchableOpacity style={styles.backgroundPlaceholder} onPress={handlePickBackground}>
+            <Ionicons name="image-outline" size={36} color="#888" />
+            <Text style={styles.backgroundPlaceholderText}>Chá»n áº£nh ná»n</Text>
+          </TouchableOpacity>
+        )}
+
+        {activeStickers.map((item) => {
+          const template = availableStickers.find((sticker) => sticker.id === item.stickerId);
+          const source = item.imageUri ? { uri: item.imageUri } : template?.uri;
+          if (!source) return null;
+          const panResponder = createPanResponder(item.instanceId);
+
+          return (
+            <View
+              key={item.instanceId}
+              {...(Platform.OS !== 'web' ? panResponder.panHandlers : {})}
+              onMouseDown={(event) => handleWebMouseDown(event, item.instanceId)}
+              style={[
+                styles.stickerItem,
+                {
+                  transform: [
+                    { translateX: item.x },
+                    { translateY: item.y },
+                    { rotate: `${item.rotate}deg` },
+                  ],
+                },
+              ]}
+            >
+              <TouchableOpacity activeOpacity={1} onPress={() => setSelectedInstanceId(item.instanceId)}>
+                <Image
+                  source={source}
+                  style={{
+                    width: item.size,
+                    height: item.size,
+                    borderWidth: selectedInstanceId === item.instanceId ? 2 : 0,
+                    borderColor: '#007AFF',
+                  }}
+                />
+              </TouchableOpacity>
+            </View>
+          );
+        })}
+      </View>
+
+      <View style={styles.toolbar}>
+        <View style={styles.toolbarHeader}>
+          <Text style={styles.sectionTitle}>ThÃªm áº£nh vÃ  sticker vÃ o khung</Text>
+          {selectedInstanceId && (
+            <TouchableOpacity style={styles.deleteBtn} onPress={removeSelectedSticker}>
+              <Ionicons name="trash-outline" size={16} color="#ff3b30" />
+              <Text style={styles.deleteText}>XÃ³a pháº§n tá»­</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <Text style={styles.uploadNotice}>áº¢nh cÃ¡ nhÃ¢n sáº½ Ä‘Æ°á»£c táº£i lÃªn Firebase khi báº¥m HoÃ n thÃ nh Ä‘á»ƒ cÃ³ thá»ƒ chia sáº».</Text>
+
+        <View style={styles.addActions}>
+          <TouchableOpacity style={styles.addAction} onPress={handlePickBackground}>
+            <Ionicons name="image-outline" size={18} color="#007AFF" />
+            <Text style={styles.addActionText}>áº¢nh ná»n</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.addAction} onPress={handlePickNewSticker}>
+            <Ionicons name="add-circle-outline" size={18} color="#007AFF" />
+            <Text style={styles.addActionText}>ThÃªm áº£nh</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator
+          onWheel={handleStickerWheel}
+          style={styles.stickerRow}
+          contentContainerStyle={styles.stickerRowContent}
+        >
+          {availableStickers.map((sticker) => (
+            <TouchableOpacity
+              key={sticker.id}
+              onPress={() => handleAddStickerToCanvas(sticker)}
+              style={styles.stickerThumb}
+            >
+              <Image source={sticker.uri} style={styles.stickerThumbImage} />
+              <View style={styles.plusBadge}>
+                <Ionicons name="add" size={10} color="#fff" />
+              </View>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {selectedSticker ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.controlScrollRow}>
+            <View style={styles.controlCard}>
+              <Text style={styles.label}>Xoay: {selectedSticker.rotate}Â°</Text>
+              <View style={styles.sliderActions}>
+                <TouchableOpacity
+                  style={styles.controlBtn}
+                  onPress={() => updateStickerParam('rotate', selectedSticker.rotate - 15)}
+                >
+                  <Ionicons name="remove" size={14} color="#333" />
+                </TouchableOpacity>
+                <View style={styles.barLine} />
+                <TouchableOpacity
+                  style={styles.controlBtn}
+                  onPress={() => updateStickerParam('rotate', selectedSticker.rotate + 15)}
+                >
+                  <Ionicons name="add" size={14} color="#333" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.controlCard}>
+              <Text style={styles.label}>KÃ­ch thÆ°á»›c: {selectedSticker.size}px</Text>
+              <View style={styles.sliderActions}>
+                <TouchableOpacity
+                  style={styles.controlBtn}
+                  onPress={() => updateStickerParam('size', Math.max(30, selectedSticker.size - 10))}
+                >
+                  <Ionicons name="remove" size={14} color="#333" />
+                </TouchableOpacity>
+                <View style={styles.barLine} />
+                <TouchableOpacity
+                  style={styles.controlBtn}
+                  onPress={() => updateStickerParam('size', selectedSticker.size + 10)}
+                >
+                  <Ionicons name="add" size={14} color="#333" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
+        ) : (
+          <Text style={styles.hintText}>Chá»n áº£nh hoáº·c sticker Ä‘á»ƒ thÃªm vÃ o khung; kÃ©o, xoay vÃ  Ä‘á»•i kÃ­ch thÆ°á»›c.</Text>
+        )}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#f0f0f0', paddingTop: 40 },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 15,
+  },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
+  completeButton: { backgroundColor: '#007AFF', paddingHorizontal: 13, paddingVertical: 9, borderRadius: 8 },
+  disabledButton: { opacity: 0.65 },
+  completeButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  canvasContainer: {
+    width: CANVAS_SIZE,
+    height: CANVAS_SIZE,
+    backgroundColor: '#fff',
+    alignSelf: 'center',
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#ccc',
+    position: 'relative',
+  },
+  bgImage: { width: '100%', height: '100%', position: 'absolute' },
+  backgroundPlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  backgroundPlaceholderText: { color: '#888', fontSize: 14 },
+  stickerItem: { position: 'absolute', top: 0, left: 0, ...(Platform.OS === 'web' ? { cursor: 'grab' } : {}) },
+  toolbar: {
+    backgroundColor: '#fff',
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 15,
+    elevation: 15,
+    minHeight: 240,
+  },
+  toolbarHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 },
+  sectionTitle: { fontSize: 12, fontWeight: '600', color: '#666' },
+  uploadNotice: { color: '#777', fontSize: 10, marginBottom: 7 },
+  deleteBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#ffe5e5', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6 },
+  deleteText: { color: '#ff3b30', fontSize: 11, fontWeight: '600' },
+  addActions: { flexDirection: 'row', gap: 9, marginBottom: 8 },
+  addAction: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: '#d7e8ff', borderRadius: 8, paddingHorizontal: 9, paddingVertical: 6 },
+  addActionText: { color: '#007AFF', fontSize: 12, fontWeight: '600' },
+  stickerRow: { height: 60, flexGrow: 0, flexShrink: 0, marginBottom: 8 },
+  stickerRowContent: { flexDirection: 'row', alignItems: 'center', paddingRight: 20 },
+  stickerThumb: { position: 'relative', padding: 6, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, marginRight: 10, backgroundColor: '#f9f9f9', width: 50, height: 50, flexShrink: 0, justifyContent: 'center', alignItems: 'center' },
+  stickerThumbImage: { width: 35, height: 35, resizeMode: 'contain' },
+  plusBadge: { position: 'absolute', bottom: 2, right: 2, backgroundColor: '#007AFF', borderRadius: 6, width: 12, height: 12, justifyContent: 'center', alignItems: 'center' },
+  controlScrollRow: { flexDirection: 'row', gap: 10 },
+  controlCard: { width: 150, backgroundColor: '#f9f9f9', padding: 8, borderRadius: 8, borderWidth: 1, borderColor: '#eee' },
+  label: { fontSize: 11, fontWeight: '600', marginBottom: 4, color: '#444' },
+  sliderActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  controlBtn: { padding: 4, backgroundColor: '#e0e0e0', borderRadius: 4 },
+  barLine: { flex: 1, height: 2, backgroundColor: '#ccc', marginHorizontal: 8, borderRadius: 2 },
+  hintText: { fontSize: 11, color: '#888', fontStyle: 'italic', textAlign: 'center', marginTop: 6 },
+});
+
+=== FILE: index.jsx ===
+import React from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+
+export default function HomeScreen() {
+  const router = useRouter();
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Avatar Frame</Text>
+      <Text style={styles.subtitle}>Táº¡o khung áº£nh cá»§a riÃªng báº¡n hoáº·c quÃ©t mÃ£ QR Ä‘á»ƒ xem khung Ä‘Æ°á»£c chia sáº».</Text>
+
+      <TouchableOpacity style={styles.primaryButton} onPress={() => router.push('/edit-avatar')}>
+        <Ionicons name="create-outline" size={22} color="#fff" />
+        <Text style={styles.buttonText}>Táº¡o Frame Má»›i</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.secondaryButton} onPress={() => router.push('/scanner')}>
+        <Ionicons name="qr-code-outline" size={22} color="#007AFF" />
+        <Text style={styles.secondaryButtonText}>QuÃ©t mÃ£ QR</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8f9fa',
+    padding: 24,
+  },
+  title: { color: '#222', fontSize: 28, fontWeight: 'bold', marginBottom: 10 },
+  subtitle: { color: '#666', fontSize: 15, lineHeight: 22, marginBottom: 32, textAlign: 'center' },
+  primaryButton: {
+    alignItems: 'center',
+    backgroundColor: '#007AFF',
+    borderRadius: 12,
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'center',
+    marginBottom: 14,
+    paddingHorizontal: 24,
+    paddingVertical: 15,
+    width: '100%',
+  },
+  secondaryButton: {
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderColor: '#007AFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 15,
+    width: '100%',
+  },
+  buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  secondaryButtonText: { color: '#007AFF', fontSize: 16, fontWeight: '700' },
+});
+
+=== FILE: scanner.jsx ===
+import React, { useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebaseConfig';
+
+export default function ScannerScreen() {
+  const router = useRouter();
+  const [permission, requestPermission] = useCameraPermissions();
+  const [isFetching, setIsFetching] = useState(false);
+  const [isRequestingPermission, setIsRequestingPermission] = useState(false);
+  const fetchInProgress = useRef(false);
+
+  const handleRequestPermission = async () => {
+    setIsRequestingPermission(true);
+    try {
+      await requestPermission();
+    } catch (error) {
+      Alert.alert('Lá»—i', `KhÃ´ng thá»ƒ yÃªu cáº§u quyá»n camera: ${error.message}`);
+    } finally {
+      setIsRequestingPermission(false);
+    }
+  };
+
+  const handleBarcodeScanned = async ({ data }) => {
+    const documentId = typeof data === 'string' ? data.trim() : '';
+    if (!documentId || fetchInProgress.current) return;
+
+    fetchInProgress.current = true;
+    setIsFetching(true);
+    try {
+      const frameSnapshot = await getDoc(doc(db, 'shared_frames', documentId));
+      if (!frameSnapshot.exists()) {
+        Alert.alert('KhÃ´ng tÃ¬m tháº¥y', 'MÃ£ QR nÃ y khÃ´ng liÃªn káº¿t vá»›i khung áº£nh Ä‘Æ°á»£c chia sáº».');
+        fetchInProgress.current = false;
+        setIsFetching(false);
+        return;
+      }
+
+      router.push({
+        pathname: '/edit-avatar',
+        params: { importedConfig: JSON.stringify(frameSnapshot.data()) },
+      });
+    } catch (error) {
+      Alert.alert('Lá»—i', `KhÃ´ng thá»ƒ táº£i khung áº£nh: ${error.message}`);
+      fetchInProgress.current = false;
+      setIsFetching(false);
+    }
+  };
+
+  if (!permission) {
+    return (
+      <View style={styles.permissionScreen}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.permissionText}>Äang kiá»ƒm tra quyá»n camera...</Text>
+      </View>
+    );
+  }
+
+  if (!permission.granted) {
+    return (
+      <View style={styles.permissionScreen}>
+        <Ionicons name="camera-outline" size={54} color="#007AFF" />
+        <Text style={styles.permissionTitle}>Cáº§n quyá»n truy cáº­p camera</Text>
+        <Text style={styles.permissionText}>Cho phÃ©p camera Ä‘á»ƒ quÃ©t mÃ£ QR cá»§a khung áº£nh.</Text>
+        <TouchableOpacity
+          style={styles.permissionButton}
+          onPress={handleRequestPermission}
+          disabled={isRequestingPermission}
+        >
+          {isRequestingPermission
+            ? <ActivityIndicator color="#fff" />
+            : <Text style={styles.permissionButtonText}>Cáº¥p quyá»n camera</Text>}
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <CameraView
+        style={StyleSheet.absoluteFill}
+        facing="back"
+        barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+        onBarcodeScanned={isFetching ? undefined : handleBarcodeScanned}
+      />
+      <View style={styles.topBar}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton} accessibilityLabel="Quay láº¡i">
+          <Ionicons name="arrow-back" size={24} color="#fff" />
+        </TouchableOpacity>
+        <Text style={styles.title}>QuÃ©t mÃ£ QR</Text>
+        <View style={styles.backButton} />
+      </View>
+      <View pointerEvents="none" style={styles.scanOverlay}>
+        <View style={styles.scanFrame} />
+        <Text style={styles.instruction}>ÄÆ°a mÃ£ QR vÃ o giá»¯a khung hÃ¬nh</Text>
+      </View>
+      {isFetching ? (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#fff" />
+          <Text style={styles.loadingText}>Äang táº£i khung áº£nh...</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#000' },
+  topBar: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingTop: 48,
+    paddingBottom: 14,
+  },
+  backButton: { width: 34, alignItems: 'center', justifyContent: 'center' },
+  title: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  scanOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  scanFrame: { width: 260, height: 260, borderColor: '#fff', borderWidth: 3, borderRadius: 18 },
+  instruction: {
+    color: '#fff',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 8,
+    fontSize: 14,
+    marginTop: 20,
+    overflow: 'hidden',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  loadingOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.7)' },
+  loadingText: { color: '#fff', fontSize: 15, fontWeight: '600', marginTop: 12 },
+  permissionScreen: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9fa', padding: 28 },
+  permissionTitle: { color: '#222', fontSize: 20, fontWeight: '700', marginTop: 18, textAlign: 'center' },
+  permissionText: { color: '#666', fontSize: 15, lineHeight: 22, marginTop: 10, textAlign: 'center' },
+  permissionButton: {
+    alignItems: 'center',
+    backgroundColor: '#007AFF',
+    borderRadius: 10,
+    justifyContent: 'center',
+    marginTop: 22,
+    minWidth: 180,
+    minHeight: 48,
+    paddingHorizontal: 18,
+  },
+  permissionButtonText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+});
+
+=== FILE: _layout.jsx ===
+import { Stack } from 'expo-router';
+
+export default function RootLayout() {
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      {/* MÃ n hÃ¬nh trang chá»§ Ä‘áº·t trá»±c tiáº¿p (hoáº·c báº¡n cÃ³ thá»ƒ Ä‘á»•i tÃªn tÃ¹y Ã½) */}
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+      
+      {/* MÃ n hÃ¬nh chá»‰nh sá»­a avatar */}
+      <Stack.Screen name="edit-avatar" options={{ headerShown: false }} />
+
+      {/* MÃ n hÃ¬nh quÃ©t mÃ£ QR */}
+      <Stack.Screen name="scanner" options={{ headerShown: false }} />
+      
+      {/* MÃ n hÃ¬nh xem chi tiáº¿t áº£nh */}
+      <Stack.Screen 
+        name="detail" 
+        options={{ 
+          presentation: 'modal', 
+          headerShown: false,
+          title: 'Chi tiáº¿t áº£nh'
+        }} 
+      />
+    </Stack>
+  );
+}
+=== FILE: firebaseConfig.js ===
+import { getApp, getApps, initializeApp } from 'firebase/app';
+import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
+
+const firebaseConfig = {
+  apiKey: 'AIzaSyAAm9xmnoinVRc9wr6JDO9Iowji5yf2DU',
+  authDomain: 'avatarframeapp.firebaseapp.com',
+  projectId: 'avatarframeapp',
+  storageBucket: 'avatarframeapp.firebasestorage.app',
+  messagingSenderId: '129885315679',
+  appId: '1:129885315679:web:eba5e5f803031e6ef071ea',
+  measurementId: 'G-CRW1P04RYK',
+};
+
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+
+export const db = getFirestore(app);
+export const storage = getStorage(app);
+
+=== FILE: package.json ===
+{
+  "name": "ccq2411b-app",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "dependencies": {
+    "@expo/vector-icons": "^15.0.2",
+    "expo": "~57.0.26",
+    "expo-camera": "~57.0.6",
+    "expo-constants": "~57.0.17",
+    "expo-image-picker": "~57.0.20",
+    "expo-linking": "~57.0.11",
+    "expo-media-library": "~57.0.5",
+    "expo-router": "~57.0.24",
+    "expo-status-bar": "~57.0.1",
+    "firebase": "^13.0.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-qrcode-svg": "^6.3.26",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0",
+    "react-native-svg": "15.15.4",
+    "react-native-view-shot": "5.1.0",
+    "react-native-web": "^0.21.2"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web"
+  },
+  "private": true
+}
+
