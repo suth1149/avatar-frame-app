@@ -71,7 +71,7 @@ function ConfettiOverlay({ trigger }) {
               { rotate: '320deg' },
             ],
           },
-        }).duration(1200);
+        }).duration(1800);
 
         return (
           <Animated.View
@@ -437,6 +437,16 @@ export default function DetailScreen() {
           </TouchableOpacity>
         ) : null}
 
+        <TouchableOpacity
+          accessibilityRole="button"
+          style={styles.collectionButton}
+          onPress={() => router.push('/collection')}
+        >
+          <Ionicons name="grid-outline" size={18} color="#5b4acc" />
+          <Text style={styles.collectionButtonText}>Xem Bộ Sưu Tập Khung</Text>
+          <Ionicons name="arrow-forward" size={16} color="#7c6ee6" />
+        </TouchableOpacity>
+
       </ScrollView>
       <ActionLoadingModal
         visible={isSharing}
@@ -617,6 +627,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   flipButtonText: { color: '#007AFF', fontSize: 14, fontWeight: '700' },
+  collectionButton: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    backgroundColor: '#f1efff',
+    borderRadius: 12,
+    flexDirection: 'row',
+    gap: 9,
+    justifyContent: 'center',
+    marginBottom: 18,
+    marginTop: 16,
+    minHeight: 44,
+    paddingHorizontal: 16,
+  },
+  collectionButtonText: { color: '#5b4acc', fontSize: 13, fontWeight: '700' },
   flashOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#fff',

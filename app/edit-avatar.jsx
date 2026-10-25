@@ -56,15 +56,23 @@ function getParamString(value) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function isPngAsset(asset) {
+  return asset.mimeType?.toLowerCase() === 'image/png'
+    || /^data:image\/png[;,]/i.test(asset.base64 || '')
+    || /\.png(?:$|[?#])/i.test(asset.fileName || '')
+    || /\.png(?:$|[?#])/i.test(asset.uri || '');
+}
+
 const assetToDataUri = async (asset) => {
   if (!asset) return null;
 
+  const mimeType = isPngAsset(asset) ? 'image/png' : 'image/jpeg';
   if (Platform.OS === 'web' && typeof document !== 'undefined') {
     return new Promise((resolve) => {
       const fallbackUri = asset.base64
         ? (asset.base64.startsWith('data:')
           ? asset.base64
-          : `data:image/jpeg;base64,${asset.base64}`)
+          : `data:${mimeType};base64,${asset.base64}`)
         : asset.uri || null;
       const img = new window.Image();
       img.onload = () => {
@@ -95,15 +103,24 @@ const assetToDataUri = async (asset) => {
             canvas.height = targetH;
             ctx.drawImage(img, 0, 0, targetW, targetH);
 
-            for (let quality = 0.6; quality >= 0.2; quality -= 0.1) {
-              dataUri = canvas.toDataURL('image/jpeg', quality);
-              const base64Length = dataUri.length - dataUri.indexOf(',') - 1;
-              if (Math.ceil((base64Length * 3) / 4) < MAX_DATA_URI_BYTES) {
-                resolve(dataUri);
-                return;
+            if (mimeType === 'image/png') {
+              dataUri = canvas.toDataURL(mimeType);
+            } else {
+              for (let quality = 0.6; quality >= 0.2; quality -= 0.1) {
+                dataUri = canvas.toDataURL(mimeType, quality);
+                const base64Length = dataUri.length - dataUri.indexOf(',') - 1;
+                if (Math.ceil((base64Length * 3) / 4) < MAX_DATA_URI_BYTES) {
+                  resolve(dataUri);
+                  return;
+                }
               }
             }
 
+            const base64Length = dataUri.length - dataUri.indexOf(',') - 1;
+            if (Math.ceil((base64Length * 3) / 4) < MAX_DATA_URI_BYTES) {
+              resolve(dataUri);
+              return;
+            }
             if (targetW <= 128 && targetH <= 128) {
               resolve(dataUri);
               return;
@@ -123,7 +140,7 @@ const assetToDataUri = async (asset) => {
   if (asset.base64) {
     return asset.base64.startsWith('data:')
       ? asset.base64
-      : `data:image/jpeg;base64,${asset.base64}`;
+      : `data:${mimeType};base64,${asset.base64}`;
   }
   return asset.uri || null;
 };
@@ -329,7 +346,7 @@ export default function EditAvatarScreen() {
     event.currentTarget.scrollLeft += event.deltaY;
   };
 
-  const pickImage = async () => {
+  const pickImage = async ({ allowsEditing = true } = {}) => {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
@@ -339,7 +356,7 @@ export default function EditAvatarScreen() {
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsEditing: true,
+        allowsEditing,
         aspect: [1, 1],
         quality: 0.25,
         base64: true,
@@ -360,7 +377,7 @@ export default function EditAvatarScreen() {
   };
 
   const handlePickNewSticker = async () => {
-    const asset = await pickImage();
+    const asset = await pickImage({ allowsEditing: false });
     if (!asset) return;
 
     const dataUri = await assetToDataUri(asset);

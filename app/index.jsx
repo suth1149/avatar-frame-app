@@ -117,7 +117,7 @@ export default function HomeScreen() {
         entering={FadeInDown.delay(200).springify()}
         style={styles.subtitle}
       >
-        Tạo khung ảnh của riêng bạn hoặc quét mã QR để xem khung được chia sẻ.
+        Tạo nên khác biệt.
       </Animated.Text>
 
       <AnimatedPressable
@@ -136,6 +136,15 @@ export default function HomeScreen() {
       >
         <Ionicons name="qr-code-outline" size={22} color="#007AFF" />
         <Text style={styles.secondaryButtonText}>Quét mã QR</Text>
+      </AnimatedPressable>
+
+      <AnimatedPressable
+        entering={FadeInDown.delay(500).springify()}
+        style={styles.collectionButton}
+        onPress={() => router.push('/collection')}
+      >
+        <Ionicons name="grid-outline" size={22} color="#fff" />
+        <Text style={styles.buttonText}>Bộ Sưu Tập Khung</Text>
       </AnimatedPressable>
 
       {showIntro ? (
@@ -197,6 +206,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 15,
+    width: '100%',
+  },
+  collectionButton: {
+    alignItems: 'center',
+    backgroundColor: '#6C5CE7',
+    borderRadius: 12,
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'center',
+    marginTop: 14,
     paddingHorizontal: 24,
     paddingVertical: 15,
     width: '100%',
